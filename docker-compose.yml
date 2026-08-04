@@ -1,0 +1,30 @@
+services:
+  knowledge_base:
+    build: ./knowledge_base
+    env_file:
+      - ./knowledge_base/.env
+    ports:
+      - "8001:8001"
+    volumes:
+      - kb_vector_store:/app/data/vector_store
+      - kb_uploads:/app/data/uploads
+
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      # Inside the compose network, the backend reaches the KB service
+      # by its service name rather than localhost.
+      - KNOWLEDGE_BASE_BASE_URL=http://knowledge_base:8001
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_projects:/app/data/projects
+    depends_on:
+      - knowledge_base
+
+volumes:
+  kb_vector_store:
+  kb_uploads:
+  backend_projects:

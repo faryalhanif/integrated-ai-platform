@@ -1,0 +1,18 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+
+langchain>=0.2.0
+langchain-core>=0.2.0
+langchain-groq>=0.1.6
+langgraph>=0.1.0
+
+httpx>=0.27.0
+python-dotenv>=1.0.1
+
+# Only required when DATABASE_URL is set (production PostgreSQL project
+# storage) — see app/services/prompt_service.py:PostgresProjectStore.
+# Not imported at all if you stay on the JSON-file store.
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9

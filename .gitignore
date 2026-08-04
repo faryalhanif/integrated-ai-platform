@@ -1,0 +1,26 @@
+# Environments
+.env
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Backend project data (business profiles / system prompts)
+backend/data/projects/*.json
+
+# Knowledge base data (vector store + temp uploads)
+knowledge_base/data/vector_store/*
+!knowledge_base/data/vector_store/.gitkeep
+knowledge_base/data/uploads/*
+!knowledge_base/data/uploads/.gitkeep
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
