@@ -1,4 +1,5 @@
 import re
+import logging
 import uuid
 from threading import Lock
 from typing import Any, Dict, List
@@ -7,6 +8,8 @@ import chromadb
 
 from app.core.config import get_settings
 from app.pipeline.state import PipelineState
+
+logger = logging.getLogger(__name__)
 
 _client = None
 _client_lock = Lock()
@@ -115,9 +118,21 @@ def query_collection(
     try:
         collection = client.get_collection(name=collection_name)
     except Exception:
+        logger.warning(
+            "query_collection: no collection named %r exists (from "
+            "project_id=%r) — nothing has been ingested for this "
+            "project yet, or project_id doesn't match what was used "
+            "at ingest time.",
+            collection_name,
+            project_id,
+        )
         return []
 
     if collection.count() == 0:
+        logger.warning(
+            "query_collection: collection %r exists but is empty (0 chunks).",
+            collection_name,
+        )
         return []
 
     results = collection.query(

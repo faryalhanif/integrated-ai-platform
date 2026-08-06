@@ -1,3 +1,5 @@
+import logging
+
 from app.agents.guardrail_agent import GuardrailAgent
 from app.agents.query_rewriter import QueryRewriter
 from app.agents.response_agent import ResponseAgent
@@ -9,6 +11,8 @@ from app.services.llm_service import LLMService
 from app.services.prompt_service import ProjectNotFoundError, get_project_store
 from app.services.session_service import get_session_store
 from app.utils.helpers import default_fallback_message, strip_markdown_emphasis
+
+logger = logging.getLogger(__name__)
 
 # Shared, lazily-created singletons — built once per process, reused
 # across every chat request/graph invocation.
@@ -96,7 +100,17 @@ def guardrail_node(state: RAGState) -> dict:
         guardrail_agent=_get_guardrail_agent(),
         query=query_for_guardrail,
         restricted_topics=restricted_topics,
+        business_name=profile.get("business_name", "the business"),
+        business_description=profile.get("business_description", "(not provided)"),
         chat_history=state.get("chat_history") or "(no previous conversation)",
+    )
+
+    logger.info(
+        "guardrail: query=%r allowed=%s is_conversational=%s reason=%r",
+        query_for_guardrail,
+        result.allowed,
+        result.is_conversational,
+        result.reason,
     )
 
     if not result.allowed:
@@ -149,7 +163,19 @@ def retrieve_node(state: RAGState) -> dict:
     except KnowledgeClientError:
         # Degrade gracefully: answer with "no context found" rather than
         # failing the whole request if the knowledge base is unreachable.
+        logger.exception(
+            "retrieve: knowledge base unreachable for knowledge_base_id=%r",
+            knowledge_base_id,
+        )
         documents = []
+
+    logger.info(
+        "retrieve: knowledge_base_id=%r query=%r -> %d document(s) [scores=%s]",
+        knowledge_base_id,
+        state.get("rewritten_query") or state["user_query"],
+        len(documents),
+        [round(d.get("score", 0.0), 3) for d in documents],
+    )
 
     context, citations = build_context_and_citations(documents)
 

@@ -13,6 +13,7 @@ Ported from the original auto-embedder notebook, with these fixes:
 """
 
 import re
+import logging
 from pathlib import Path
 from typing import Any, List
 
@@ -26,6 +27,8 @@ from PIL import Image as PILImage
 from app.core.config import get_settings
 from app.pipeline.llm import summarize_table_markdown
 from app.pipeline.state import PipelineState
+
+logger = logging.getLogger(__name__)
 
 FileTypes = {
     ".pdf": "pdf",
@@ -155,6 +158,10 @@ def pdf_parser_node(state: PipelineState) -> PipelineState:
     file_path = state["file_path"]
     documents = []
 
+    settings = get_settings()
+    if settings.TESSERACT_CMD:
+        pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
+
     with pdfplumber.open(file_path) as pdf:
         for i, page in enumerate(pdf.pages):
             page_num = i + 1
@@ -189,6 +196,50 @@ def pdf_parser_node(state: PipelineState) -> PipelineState:
                         },
                     }
                 )
+            else:
+                # No text layer on this page — pdfplumber's extract_text()
+                # only reads embedded/selectable text, so scanned pages
+                # (a photographed/scanned PDF with no real text layer,
+                # just a picture of a page) come back empty here even
+                # though there's clearly content to a human eye. Previously
+                # this page was just silently skipped: no error, but
+                # nothing got embedded either — which is exactly the "no
+                # error but doesn't answer from it" symptom. Fall back to
+                # rendering the page as an image and OCR-ing it, same as
+                # image_parser_node does for standalone image files.
+                try:
+                    page_image = page.to_image(resolution=200).original
+                    ocr_text = pytesseract.image_to_string(page_image)
+                except Exception:
+                    logger.exception(
+                        "OCR fallback failed for %s page %d — this page's "
+                        "content was skipped (no text extracted, no chunk "
+                        "created). Check that Tesseract is installed and "
+                        "on PATH, or that TESSERACT_CMD is set correctly.",
+                        file_path,
+                        page_num,
+                    )
+                    ocr_text = ""
+
+                if ocr_text and ocr_text.strip():
+                    documents.append(
+                        {
+                            "page_content": ocr_text.strip(),
+                            "metadata": {
+                                "source": file_path,
+                                "page_number": page_num,
+                                "content_type": "text",
+                                "layout_detected": "pdf_page_ocr",
+                            },
+                        }
+                    )
+                else:
+                    logger.warning(
+                        "%s page %d: no embedded text and OCR found nothing "
+                        "usable — this page will not be searchable.",
+                        file_path,
+                        page_num,
+                    )
 
             for table in page.extract_tables():
                 md_table = table_to_markdown(table)

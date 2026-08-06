@@ -26,6 +26,8 @@ def run_guardrail(
     guardrail_agent: GuardrailAgent,
     query: str,
     restricted_topics: List[str],
+    business_name: str = "the business",
+    business_description: str = "(not provided)",
     chat_history: str = "(no previous conversation)",
 ) -> GuardrailResult:
     """
@@ -36,7 +38,10 @@ def run_guardrail(
     3. Otherwise defer to the LLM-based GuardrailAgent for prompt
        injection / off-topic / harmful-content detection, using recent
        conversation history to correctly read follow-ups and casual
-       replies rather than judging the message in isolation.
+       replies rather than judging the message in isolation, and the
+       business's own description so it can correctly judge whether
+       specialized/technical questions are actually on-topic for this
+       specific business rather than guessing blind.
     """
 
     settings = get_settings()
@@ -54,6 +59,8 @@ def run_guardrail(
 
     return guardrail_agent.run(
         query=query,
+        business_name=business_name,
+        business_description=business_description,
         restricted_topics=restricted_topics,
         chat_history=chat_history,
     )
