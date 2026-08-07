@@ -92,4 +92,15 @@ Business Information:
         if submission.logo_url:
             result["logo_url"] = str(submission.logo_url)
 
+        if submission.contact_phone:
+            result["contact_phone"] = submission.contact_phone
+
+        if submission.contact_address:
+            result["contact_address"] = submission.contact_address
+
+        if submission.social_links:
+            result["social_links"] = {
+                k: str(v) for k, v in submission.social_links.items()
+            }
+
         return BusinessProfile(**result)

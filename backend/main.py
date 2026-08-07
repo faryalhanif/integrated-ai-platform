@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import business, chat, health
+from app.api import business, chat, health, website, widget
 from app.core.config import get_settings
 
 logging.basicConfig(level=logging.INFO)
@@ -26,6 +26,8 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(business.router)
 app.include_router(chat.router)
+app.include_router(website.router)
+app.include_router(widget.router)
 
 
 @app.get("/")

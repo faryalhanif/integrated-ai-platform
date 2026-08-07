@@ -88,7 +88,26 @@ class BusinessSubmission(BaseModel):
 
     logo_url: Optional[HttpUrl] = Field(
         default=None,
-        description="Optional logo URL.",
+        description="Optional logo URL — used as-is in the chat widget and in generated websites.",
+    )
+
+    contact_phone: Optional[str] = Field(
+        default=None,
+        description="Optional public phone number, shown on a Contact page/section if one is generated.",
+    )
+
+    contact_address: Optional[str] = Field(
+        default=None,
+        description="Optional physical/mailing address, shown on a Contact page/section if one is generated.",
+    )
+
+    social_links: Optional[Dict[str, HttpUrl]] = Field(
+        default=None,
+        description=(
+            "Optional social profile URLs, e.g. "
+            "{'instagram': 'https://instagram.com/you', 'linkedin': '...'}. "
+            "Rendered as footer/contact links in generated websites."
+        ),
     )
 
     knowledge_base_id: Optional[str] = Field(
@@ -139,6 +158,12 @@ class BusinessProfile(BaseModel):
     brand_colors: Optional[Dict[str, str]] = None
 
     logo_url: Optional[HttpUrl] = None
+
+    contact_phone: Optional[str] = None
+
+    contact_address: Optional[str] = None
+
+    social_links: Optional[Dict[str, HttpUrl]] = None
 
     knowledge_base_id: Optional[str] = None
 

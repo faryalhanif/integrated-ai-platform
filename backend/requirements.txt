@@ -8,6 +8,12 @@ langchain-core>=0.2.0
 langchain-groq>=0.1.6
 langgraph>=0.1.0
 
+# Website generation LLM. Required only if LLM_PROVIDER or
+# WEBSITE_LLM_PROVIDER is set to "gemini" (see app/services/llm_service.py) —
+# the diagram's "Gemini API, free during testing" option. Safe to leave
+# installed even when unused.
+langchain-google-genai>=1.0.10
+
 httpx>=0.27.0
 python-dotenv>=1.0.1
 

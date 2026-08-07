@@ -2,6 +2,81 @@ from typing import Optional
 import re
 
 
+def extract_html_document(text: str) -> str:
+    """
+    Defensive cleanup for LLM-generated HTML (website codegen/edit
+    agents). Model output should already be a raw HTML document per the
+    prompt, but this strips a wrapping ```html fence if one slipped
+    through, and trims anything before <!DOCTYPE/<html or after the
+    final </html>, so a stray preamble/sign-off never ends up embedded
+    in the live preview.
+    """
+
+    if not text:
+        return text
+
+    cleaned = text.strip()
+
+    # Strip a wrapping ```html ... ``` or ``` ... ``` fence.
+    fence_match = re.match(
+        r"^```(?:html)?\s*\n(.*)\n```$", cleaned, flags=re.DOTALL
+    )
+    if fence_match:
+        cleaned = fence_match.group(1).strip()
+
+    lower = cleaned.lower()
+
+    start = lower.find("<!doctype")
+    if start == -1:
+        start = lower.find("<html")
+
+    end = lower.rfind("</html>")
+
+    if start != -1 and end != -1:
+        cleaned = cleaned[start : end + len("</html>")]
+
+    return cleaned.strip()
+
+
+class TruncatedHTMLError(Exception):
+    """
+    Raised when generated HTML is missing its closing </html> — almost
+    always means the model hit its output-token limit mid-document
+    rather than that it returned genuinely malformed HTML. Callers
+    should surface this distinctly (e.g. "try fewer pages/sections, or
+    raise WEBSITE_LLM_MAX_TOKENS") instead of silently rendering a
+    half-written page, which shows up in a browser as a blank/broken
+    preview with no indication of what went wrong.
+    """
+
+
+def assert_complete_html_document(html: str) -> None:
+    """
+    Validates that `html` (already run through extract_html_document)
+    is a plausibly complete document, distinguishing "the model didn't
+    return HTML at all" from "the model's HTML got cut off partway
+    through" so each can be reported with an actionable message.
+    """
+
+    lower = html.lower()
+
+    if "<html" not in lower:
+        raise ValueError(
+            "Generation did not return an HTML document at all — this "
+            "is usually a model/prompt-format issue, not a size issue."
+        )
+
+    if "</html>" not in lower:
+        raise TruncatedHTMLError(
+            "The generated page was cut off before it finished (missing "
+            "closing </html>) — this almost always means the site was "
+            "too large for the current WEBSITE_LLM_MAX_TOKENS budget. "
+            "Try asking for fewer pages/sections, or raise "
+            "WEBSITE_LLM_MAX_TOKENS in backend/.env (Gemini 2.5 Flash "
+            "supports up to 65536 output tokens)."
+        )
+
+
 def default_fallback_message(
     business_name: str,
     escalation_contact: Optional[str] = None,

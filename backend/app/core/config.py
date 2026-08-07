@@ -37,6 +37,33 @@ class Settings(BaseSettings):
     LLM_MAX_TOKENS: int = 2048
 
     # ---------------------------------
+    # Website Generation LLM
+    # ---------------------------------
+    # Website generation (planning + full-page HTML code generation) has
+    # very different needs from the short, cheap chat-turn LLM above: much
+    # longer outputs, and — per the "free during testing, Claude/GPT later
+    # in production" plan — often a different provider entirely. All three
+    # fields are optional and fall back to the LLM_* values above when
+    # left blank, so a single-provider setup (e.g. everything on Groq)
+    # still works with zero extra config.
+    WEBSITE_LLM_PROVIDER: str = ""
+    WEBSITE_LLM_MODEL: str = ""
+    WEBSITE_LLM_API_KEY: str = ""
+
+    WEBSITE_LLM_TEMPERATURE: float = 0.4
+    WEBSITE_LLM_MAX_TOKENS: int = 32768
+
+    # Edits should be precise, not creative — a lower temperature than
+    # initial generation noticeably improves how reliably the Edit Agent
+    # applies exactly the requested change and nothing else.
+    WEBSITE_EDIT_TEMPERATURE: float = 0.1
+
+    # Directory where generated websites (spec + design + HTML) are
+    # persisted as JSON, one file per project — same zero-setup pattern
+    # as STORAGE_DIR above.
+    WEBSITE_STORAGE_DIR: str = "./data/websites"
+
+    # ---------------------------------
     # Project / Business Profile storage
     # ---------------------------------
     # Directory where BusinessProfile + generated system prompts are

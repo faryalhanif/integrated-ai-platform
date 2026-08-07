@@ -93,6 +93,55 @@ docker compose up --build
    `{"project_id", "session_id", "user_query"}`. The backend calls the
    Knowledge Base service internally to retrieve context and answers
    with citations.
+4. **Get a web presence** — two independent paths, both built from the
+   same `project_id`'s business profile + ingested documents (see
+   "Website generation" below).
+
+## Website generation
+
+New pipeline in `backend/app/agents/website_*.py`,
+`app/services/website_service.py`, and `app/api/website.py`, matching
+the two paths from the architecture diagram:
+
+**Chat Widget (zero friction)** — `GET /website/{project_id}/widget`.
+No form, nothing to generate: it just returns an embed snippet wired to
+the project's existing business profile + RAG data, instantly.
+
+**Full Website** — a four-step loop:
+
+1. `POST /website/plan` `{project_id, prompt, answers?}` — the
+   **Planner Agent** reads the business profile, a knowledge-base
+   sample, and the prompt, and decides which pages are actually needed
+   (no Contact page requested → it never asks for a physical address).
+   Returns a `WebsitePlan`: `pages`, and `missing_fields` — anything
+   strictly necessary it couldn't find on its own (e.g. pricing tiers
+   for a requested Pricing page with no pricing in the knowledge base).
+2. If `missing_fields` is non-empty, collect short answers from the
+   user (keyed by `MissingField.key`) and re-plan, or go straight to
+   generation with them.
+3. `POST /website/generate` `{project_id, prompt, answers}` — runs
+   Planner → **Content Agent** (RAG-grounded copy, never invents facts)
+   → **Design Agent** (palette/typography) → **Layout Agent**
+   (per-page section order) → **Code Generation Agent**, and returns a
+   `GeneratedWebsite` with one complete, self-contained HTML document
+   (Tailwind CDN + vanilla JS, no build step) ready to drop into an
+   `<iframe>` as a live preview or deploy as-is to any static host.
+4. `POST /website/edit` `{project_id, site_id, instruction}` — the
+   **Edit Agent** applies a plain-English change ("make it darker",
+   "add a pricing page") and returns the updated site; loop as needed.
+   `GET /website/{project_id}` fetches the current site (e.g. to resume
+   after a reload).
+
+Try the whole thing in the browser: open `onboarding.html` (project
+root), create a business in step 1, then use step 4, "Generate a
+website" — no separate setup required.
+
+The website-generation LLM is configured separately from the chat LLM
+via `WEBSITE_LLM_PROVIDER` / `WEBSITE_LLM_MODEL` / `WEBSITE_LLM_API_KEY`
+in `backend/.env` (falls back to the `LLM_*` values if left blank) —
+set `WEBSITE_LLM_PROVIDER=gemini` to run it on Gemini (free tier while
+testing) while keeping the chat pipeline on Groq, or point both at the
+same provider. Supported providers: `groq`, `gemini`.
 
 Both services default to `*` CORS and no auth for local dev. Set
 `SERVICE_API_KEY` in `knowledge_base/.env` and the matching
