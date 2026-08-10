@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any, Dict, List
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -82,4 +83,86 @@ never re-ask for something answered here):
             }
         )
 
+        plan = self._coerce_plan(result)
+
+        return self._drop_missing_fields_already_covered(plan, kb_text)
+
+    @staticmethod
+    def _coerce_plan(result: Any) -> WebsitePlan:
+        """
+        The LLM is asked to return a single JSON object matching
+        WebsitePlan, but occasionally (model-dependent, seen with
+        gemini-2.5-flash) it instead returns a bare JSON list -- either
+        a one-item list wrapping the real object, or a list of page
+        objects with the rest of the object's fields omitted. Both were
+        previously crashing generation with
+        "argument after ** must be a mapping, not list". Recover in
+        both cases instead of failing the whole request.
+        """
+
+        if isinstance(result, list):
+            if len(result) == 1 and isinstance(result[0], dict):
+                result = result[0]
+            elif all(isinstance(item, dict) for item in result):
+                result = {"pages": result, "missing_fields": [], "ready": True}
+            else:
+                raise ValueError(
+                    f"Planner Agent returned an unrecognized list shape: {result!r}"
+                )
+
+        if not isinstance(result, dict):
+            raise ValueError(
+                f"Planner Agent returned an unexpected type: {type(result)!r}"
+            )
+
         return WebsitePlan(**result)
+
+    # Generic pattern for "concrete pricing already exists somewhere in the
+    # retrieved knowledge base sample" -- a currency symbol next to a
+    # number ("$29", "€79"), or a number paired with a billing period
+    # ("29/month", "199 per year"). Deliberately generic (no business
+    # names, plan names, or amounts hardcoded) so it works for any
+    # project's data, not just one business's pricing table.
+    _PRICING_EVIDENCE_PATTERN = re.compile(
+        r"[$€£]\s?\d|\b\d{1,6}\s?(?:/|per\s)\s?(?:month|mo|year|yr|wk|week)\b",
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def _drop_missing_fields_already_covered(
+        cls, plan: WebsitePlan, kb_text: str
+    ) -> WebsitePlan:
+        """
+        Safety net for a specific failure mode seen with gemini-2.5-flash:
+        the model asks the user for pricing via missing_fields even when
+        concrete pricing is already sitting in the knowledge_base_sample
+        it was just given -- it's a model-reliability gap, not a missing
+        RAG connection, so fixing it here (deterministically) is more
+        reliable than only tightening the prompt further. If the KB
+        sample clearly already contains real pricing figures, any
+        pricing-related missing_field is dropped and `ready` is
+        recalculated. Every other missing_field (contact info, team
+        bios, testimonials, etc.) is left untouched -- this only guards
+        against re-asking for pricing that's demonstrably already there.
+        """
+
+        if not plan.missing_fields:
+            return plan
+
+        if not cls._PRICING_EVIDENCE_PATTERN.search(kb_text):
+            return plan
+
+        remaining = [
+            field
+            for field in plan.missing_fields
+            if "pric" not in field.key.lower()
+            and "pric" not in field.question.lower()
+        ]
+
+        if len(remaining) == len(plan.missing_fields):
+            return plan
+
+        plan.missing_fields = remaining
+        plan.ready = len(remaining) == 0
+
+        return plan

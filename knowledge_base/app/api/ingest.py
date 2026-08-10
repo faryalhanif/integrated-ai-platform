@@ -38,7 +38,10 @@ async def ingest_file_endpoint(
 
     except Exception as exc:
         logger.exception("File ingestion failed for project_id=%s", project_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(
+            status_code=500,
+            detail="Something went wrong while processing this file. Please try again.",
+        )
 
 
 @router.post(
@@ -60,4 +63,7 @@ async def ingest_url_endpoint(request: IngestUrlRequest):
 
     except Exception as exc:
         logger.exception("URL ingestion failed for project_id=%s", request.project_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(
+            status_code=500,
+            detail="Something went wrong while processing this URL. Please try again.",
+        )

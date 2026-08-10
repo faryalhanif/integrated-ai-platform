@@ -122,6 +122,21 @@ class GeneratedWebsite(BaseModel):
 
     project_id: str
 
+    slug: Optional[str] = Field(
+        default=None,
+        description="URL-safe identifier used for the public GET /sites/{slug} address.",
+    )
+
+    site_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "Shareable link to the hosted page, built per-request from the "
+            "incoming request's own host (see _with_site_url in api/website.py). "
+            "Never persisted — always recomputed so it reflects wherever the "
+            "app is actually being served from."
+        ),
+    )
+
     prompt: str
 
     plan: WebsitePlan

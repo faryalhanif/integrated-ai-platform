@@ -9,6 +9,7 @@ def _build_chat_model(
     api_key: str,
     temperature: float,
     max_tokens: int,
+    max_retries: int = 2,
 ) -> BaseChatModel:
     """
     Only place in the codebase that knows about concrete provider SDKs.
@@ -26,6 +27,7 @@ def _build_chat_model(
             api_key=api_key,
             temperature=temperature,
             max_tokens=max_tokens,
+            max_retries=max_retries,
         )
 
     if provider == "gemini":
@@ -43,6 +45,7 @@ def _build_chat_model(
             google_api_key=api_key,
             temperature=temperature,
             max_output_tokens=max_tokens,
+            max_retries=max_retries,
         )
 
     raise ValueError(f"Unsupported LLM provider: {provider}")
@@ -85,6 +88,7 @@ class LLMService:
             api_key=settings.LLM_API_KEY,
             temperature=settings.LLM_TEMPERATURE,
             max_tokens=settings.LLM_MAX_TOKENS,
+            max_retries=settings.LLM_MAX_RETRIES,
         )
 
         return cls._llm
@@ -103,6 +107,7 @@ class LLMService:
             api_key=settings.WEBSITE_LLM_API_KEY or settings.LLM_API_KEY,
             temperature=settings.WEBSITE_LLM_TEMPERATURE,
             max_tokens=settings.WEBSITE_LLM_MAX_TOKENS,
+            max_retries=settings.WEBSITE_LLM_MAX_RETRIES,
         )
 
         return cls._website_llm
@@ -127,6 +132,7 @@ class LLMService:
             api_key=settings.WEBSITE_LLM_API_KEY or settings.LLM_API_KEY,
             temperature=settings.WEBSITE_EDIT_TEMPERATURE,
             max_tokens=settings.WEBSITE_LLM_MAX_TOKENS,
+            max_retries=settings.WEBSITE_LLM_MAX_RETRIES,
         )
 
         return cls._website_edit_llm

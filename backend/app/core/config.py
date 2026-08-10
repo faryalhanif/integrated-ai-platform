@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     LLM_TEMPERATURE: float = 0.2
     LLM_MAX_TOKENS: int = 2048
 
+    # Provider SDKs (e.g. langchain-google-genai) retry failed calls with
+    # growing backoff by default (often 5-6 attempts, ~30s total) even
+    # for errors like a daily quota being exhausted, which can never
+    # succeed by retrying sooner. A low default here fails fast instead
+    # of making the caller wait ~30s just to see the same error.
+    LLM_MAX_RETRIES: int = 2
+
     # ---------------------------------
     # Website Generation LLM
     # ---------------------------------
@@ -52,6 +59,7 @@ class Settings(BaseSettings):
 
     WEBSITE_LLM_TEMPERATURE: float = 0.4
     WEBSITE_LLM_MAX_TOKENS: int = 32768
+    WEBSITE_LLM_MAX_RETRIES: int = 2
 
     # Edits should be precise, not creative — a lower temperature than
     # initial generation noticeably improves how reliably the Edit Agent

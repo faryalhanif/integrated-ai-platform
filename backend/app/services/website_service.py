@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 from uuid import uuid4
@@ -14,6 +15,7 @@ from app.schemas.website import GeneratedWebsite, WebsitePlan, WidgetEmbedRespon
 from app.services.llm_service import LLMService
 from app.services.prompt_service import get_project_store
 from app.services.website_store import WebsiteNotFoundError, get_website_store
+from app.utils.helpers import slugify_business_name
 
 logger = logging.getLogger(__name__)
 
@@ -56,32 +58,89 @@ class WebsiteGenerationService:
     # Full Website path
     # ------------------------------------------------------------
 
+    # Fixed set of "coverage" queries run alongside the user's own
+    # website-generation prompt when sampling the knowledge base. A
+    # prompt like "build a modern SaaS website" is a poor semantic match
+    # for a specific chunk like a pricing table, so relying on it alone
+    # regularly missed information that was genuinely already ingested —
+    # the Planner would then (correctly, given what it could see) ask
+    # for details the user had already provided. Running these targeted
+    # queries too and merging the results fixes that.
+    _RAG_COVERAGE_QUERIES = (
+        "pricing plans and cost",
+        "contact information phone email address",
+        "team members founders leadership",
+        "customer testimonials reviews feedback",
+        "frequently asked questions",
+        "features and services offered",
+        "refund cancellation policy",
+    )
+
     def _rag_sample(
         self,
         project_id: str,
         query: str,
         top_k: int = 8,
+        max_total: int = 30,
     ) -> List[Dict[str, Any]]:
         """
         Best-effort knowledge-base sample used to ground planning and
-        copywriting. Never blocks the pipeline — an unreachable or empty
-        knowledge base just means the Planner/Content agents see less
-        context (and, correctly, may ask the user for more).
+        copywriting. Runs the user's own prompt plus several fixed
+        coverage queries (see _RAG_COVERAGE_QUERIES) CONCURRENTLY — not
+        sequentially — and merges/dedupes the results. Wall-clock cost
+        is therefore roughly one retrieval call's latency, not eight,
+        since all 8 requests are in flight at the same time rather than
+        queued one after another. Never blocks the pipeline — an
+        unreachable knowledge base just means the Planner/Content agents
+        see less context (and, correctly, may ask the user for more).
         """
 
-        try:
-            return self.knowledge_client.retrieve(
-                project_id=project_id,
-                query=query,
-                top_k=top_k,
-            )
-        except KnowledgeClientError:
+        queries = (query, *self._RAG_COVERAGE_QUERIES)
+        results_per_query: List[List[Dict[str, Any]]] = [[] for _ in queries]
+        knowledge_base_down = False
+
+        with ThreadPoolExecutor(max_workers=len(queries)) as pool:
+            future_to_index = {
+                pool.submit(
+                    self.knowledge_client.retrieve,
+                    project_id=project_id,
+                    query=q,
+                    top_k=top_k,
+                ): i
+                for i, q in enumerate(queries)
+            }
+
+            for future in as_completed(future_to_index):
+                index = future_to_index[future]
+                try:
+                    results_per_query[index] = future.result()
+                except KnowledgeClientError:
+                    knowledge_base_down = True
+
+        if knowledge_base_down:
             logger.warning(
-                "Knowledge base unreachable while planning/generating "
-                "website for project_id=%s — continuing without RAG context.",
+                "Knowledge base unreachable (or partially unreachable) "
+                "while planning/generating website for project_id=%s — "
+                "continuing with whatever context was retrieved.",
                 project_id,
             )
-            return []
+
+        # Preserve original query order (the user's own prompt first) so
+        # the most directly-relevant chunks land earliest in the merged
+        # sample, even though the requests themselves ran concurrently.
+        merged: List[Dict[str, Any]] = []
+        seen_content: set = set()
+
+        for results in results_per_query:
+            for r in results:
+                key = (r.get("content") or "")[:200]
+                if key and key not in seen_content:
+                    seen_content.add(key)
+                    merged.append(r)
+                if len(merged) >= max_total:
+                    return merged
+
+        return merged
 
     def plan(
         self,
@@ -163,6 +222,7 @@ class WebsiteGenerationService:
         site = GeneratedWebsite(
             site_id=str(uuid4()),
             project_id=project_id,
+            slug=slugify_business_name(profile.business_name, project_id),
             prompt=prompt,
             plan=plan,
             design=design,
@@ -212,6 +272,21 @@ class WebsiteGenerationService:
 
     def get_latest(self, project_id: str) -> GeneratedWebsite:
         return self.website_store.get(project_id)
+
+    def delete(self, project_id: str) -> bool:
+        """
+        Deletes this project's stored generated website, if any. Used by
+        the "Start Over" flow: without this, a re-submitted prompt has
+        an existing site sitting in storage and gets routed through the
+        Edit Agent (which only rewrites the old HTML by instruction and
+        never touches the Business Profile or knowledge base) instead of
+        through a genuine Planner -> Content/Design/Layout -> Code
+        Generation run. Returns True if a site was found and deleted,
+        False if there was nothing to delete (still a success from the
+        caller's point of view -- "start fresh" either way).
+        """
+
+        return self.website_store.delete(project_id)
 
     # ------------------------------------------------------------
     # Chat Widget path — zero friction, no generation step at all

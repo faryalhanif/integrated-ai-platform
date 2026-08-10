@@ -6,6 +6,7 @@ from app.rag.knowledge_client import KnowledgeClient
 from app.schemas.business import BusinessSubmission
 from app.services.onboarding_service import OnboardingService
 from app.services.prompt_service import ProjectNotFoundError, get_project_store
+from app.utils.llm_errors import friendly_llm_error_message, is_llm_rate_limited
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +34,11 @@ async def submit_business_information(
 
     except Exception as e:
 
+        logger.exception("Business submission failed for business_name=%s", submission.business_name)
+        status = 429 if is_llm_rate_limited(e) else 500
         raise HTTPException(
-            status_code=500,
-            detail=str(e),
+            status_code=status,
+            detail=friendly_llm_error_message(e),
         )
 
 

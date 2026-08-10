@@ -38,7 +38,20 @@ def extract_html_document(text: str) -> str:
     return cleaned.strip()
 
 
-class TruncatedHTMLError(Exception):
+def slugify_business_name(name: str, suffix: str) -> str:
+    """
+    Turns a business name into a URL-safe slug for the public site
+    address (GET /sites/{slug}), e.g. "Nimbus Analytics!" + a project_id
+    -> "nimbus-analytics-829a32". The short suffix (first 6 chars of the
+    project_id) keeps two businesses with the same name from colliding
+    without making the URL any less readable.
+    """
+
+    base = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
+    base = base or "site"
+    return f"{base}-{suffix[:6]}"
+
+
     """
     Raised when generated HTML is missing its closing </html> — almost
     always means the model hit its output-token limit mid-document

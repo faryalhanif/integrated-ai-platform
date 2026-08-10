@@ -49,6 +49,25 @@ class JSONFileWebsiteStore:
 
         return GeneratedWebsite(**data)
 
+    def get_by_slug(self, slug: str) -> GeneratedWebsite:
+        """
+        Looks up a site by its public URL slug (GET /sites/{slug}).
+        Linear scan over the storage dir — perfectly fine at the file
+        counts this local/dev store is meant for; swap for an indexed
+        lookup if this ever backs a real multi-tenant deployment.
+        """
+
+        with self._lock:
+            for path in self._dir.glob("*.json"):
+                try:
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    continue
+                if data.get("slug") == slug:
+                    return GeneratedWebsite(**data)
+
+        raise WebsiteNotFoundError(f"No website found at slug={slug!r}")
+
     def exists(self, project_id: str) -> bool:
         return self._path(project_id).exists()
 
