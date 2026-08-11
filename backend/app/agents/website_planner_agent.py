@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from typing import Any, Dict, List
 
@@ -10,6 +11,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from app.core.prompts import WEBSITE_PLANNER_SYSTEM_PROMPT
 from app.schemas.business import BusinessProfile
 from app.schemas.website import WebsitePlan
+
+logger = logging.getLogger(__name__)
 
 
 class WebsitePlannerAgent:
@@ -71,6 +74,16 @@ never re-ask for something answered here):
                 f"- {chunk.get('content', '')}" for chunk in knowledge_base_sample
             )
             or "(no knowledge base content available)"
+        )
+
+        logger.info(
+            "Planner kb_text built from %d chunk(s): %s | preview: %r",
+            len(knowledge_base_sample),
+            [
+                (c.get("source", "?"), len(c.get("content", "")))
+                for c in knowledge_base_sample
+            ],
+            kb_text[:800],
         )
 
         result = chain.invoke(
@@ -150,6 +163,13 @@ never re-ask for something answered here):
             return plan
 
         if not cls._PRICING_EVIDENCE_PATTERN.search(kb_text):
+            logger.info(
+                "Pricing safety net: no currency/billing-period pattern found "
+                "in the %d-char knowledge base sample -- leaving missing_fields "
+                "as the LLM returned them (%d field(s)).",
+                len(kb_text),
+                len(plan.missing_fields),
+            )
             return plan
 
         remaining = [
@@ -160,7 +180,22 @@ never re-ask for something answered here):
         ]
 
         if len(remaining) == len(plan.missing_fields):
+            logger.info(
+                "Pricing safety net: currency/billing-period pattern WAS found "
+                "in the knowledge base sample, but none of the %d missing_field(s) "
+                "look pricing-related by key/question text -- nothing dropped.",
+                len(plan.missing_fields),
+            )
             return plan
+
+        logger.info(
+            "Pricing safety net: dropped %d pricing-related missing_field(s) "
+            "because pricing was already present in the knowledge base sample "
+            "(%d remaining, ready=%s).",
+            len(plan.missing_fields) - len(remaining),
+            len(remaining),
+            len(remaining) == 0,
+        )
 
         plan.missing_fields = remaining
         plan.ready = len(remaining) == 0

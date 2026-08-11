@@ -43,14 +43,18 @@ async def ingest_file(project_id: str, file: UploadFile) -> IngestResponse:
             file_path=str(tmp_path),
         )
 
+        chunks = final_state.get("chunks_ingested", 0)
+        source = file.filename or str(tmp_path)
+
         return IngestResponse(
             success=True,
             project_id=project_id,
             collection_name=final_state.get(
                 "collection_name", sanitize_collection_name(project_id)
             ),
-            source=file.filename or str(tmp_path),
-            chunks_ingested=final_state.get("chunks_ingested", 0),
+            source=source,
+            chunks_ingested=chunks,
+            message=f"Ingested {chunks} chunks from '{source}'.",
         )
 
     finally:
@@ -60,6 +64,8 @@ async def ingest_file(project_id: str, file: UploadFile) -> IngestResponse:
 def ingest_url(project_id: str, url: str) -> IngestResponse:
     final_state = run_ingestion_pipeline(project_id=project_id, url=url)
 
+    chunks = final_state.get("chunks_ingested", 0)
+
     return IngestResponse(
         success=True,
         project_id=project_id,
@@ -67,5 +73,6 @@ def ingest_url(project_id: str, url: str) -> IngestResponse:
             "collection_name", sanitize_collection_name(project_id)
         ),
         source=url,
-        chunks_ingested=final_state.get("chunks_ingested", 0),
+        chunks_ingested=chunks,
+        message=f"Ingested {chunks} chunks from '{url}'.",
     )

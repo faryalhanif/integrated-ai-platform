@@ -29,12 +29,26 @@ def friendly_llm_error_message(exc: BaseException) -> str:
     this is used.
     """
 
+    exc_text = str(exc)
+
     if is_llm_rate_limited(exc):
         return (
             "The AI service is temporarily rate-limited (the connected "
             "account has hit its request quota). This isn't an error in "
             "your data or prompt -- please wait a few minutes and try "
             "again."
+        )
+
+    if (
+        "PERMISSION_DENIED" in exc_text
+        or "denied access" in exc_text.lower()
+        or "not available to new users" in exc_text.lower()
+        or "NOT_FOUND" in exc_text
+    ):
+        return (
+            "The configured AI model or API key does not have access to the "
+            "selected provider. Please check your .env settings and use a "
+            "supported model or valid API key."
         )
 
     return "Something went wrong while processing this request. Please try again."

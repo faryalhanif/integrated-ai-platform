@@ -1,4 +1,5 @@
 import json
+import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 from threading import Lock
@@ -335,8 +336,21 @@ def get_project_store() -> ProjectStore:
         with _store_lock:
             if _store is None:
                 settings = get_settings()
-                if settings.DATABASE_URL:
-                    _store = PostgresProjectStore(settings.DATABASE_URL)
+                db_url = settings.DATABASE_URL.strip()
+                placeholder_urls = {
+                    "postgresql+psycopg2://app_user:change_me@localhost:5432/integrated_ai_platform",
+                    "postgresql://app_user:change_me@localhost:5432/integrated_ai_platform",
+                }
+
+                if db_url and db_url not in placeholder_urls:
+                    try:
+                        _store = PostgresProjectStore(settings.DATABASE_URL)
+                    except Exception:
+                        logging.warning(
+                            "Could not initialize PostgresProjectStore; falling back to JSONFileProjectStore.",
+                            exc_info=True,
+                        )
+                        _store = JSONFileProjectStore(settings.STORAGE_DIR)
                 else:
                     _store = JSONFileProjectStore(settings.STORAGE_DIR)
 
