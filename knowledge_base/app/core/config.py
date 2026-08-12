@@ -1,7 +1,15 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# This file lives at knowledge_base/app/core/config.py -- three parents
+# up is the knowledge_base package root, used below to anchor relative
+# storage paths so they resolve the same way regardless of the process's
+# current working directory at launch time (see chroma_persist_dir_abs /
+# upload_tmp_dir_abs).
+_PACKAGE_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 class Settings(BaseSettings):
@@ -74,7 +82,20 @@ class Settings(BaseSettings):
     # of falling back. Raise this further (e.g. 0.5) for stricter
     # grounding at the cost of occasionally missing a real answer;
     # lower it if legitimate answers are getting filtered out.
-    MIN_RELEVANCE_SCORE: float = 0.35
+    #
+    # Lowered from 0.35 -> 0.28 based on an observed real-world miss:
+    # a genuinely correct chunk ("Team - Priya Raman, Co-founder & CEO...")
+    # scored ~0.40 for a keyword-heavy query ("team members founders
+    # leadership") but a natural conversational phrasing of the same
+    # question ("who is the founder or the co founder?") scored below
+    # 0.35 and got filtered out entirely -- all-MiniLM-L6-v2 is a small,
+    # fast embedding model and its cosine scores for a correct match run
+    # noticeably lower than a stronger model's would. 0.28 gives enough
+    # headroom for that gap while still filtering genuinely unrelated
+    # chunks. If off-topic questions start getting weakly-grounded
+    # answers instead of a clean fallback, raise this back up; if real
+    # answers are still getting missed, lower it further.
+    MIN_RELEVANCE_SCORE: float = 0.28
 
     # ---------------------------------
     # File uploads
@@ -126,6 +147,29 @@ class Settings(BaseSettings):
             for origin in self.CORS_ORIGINS.split(",")
             if origin.strip()
         ]
+
+    @property
+    def chroma_persist_dir_abs(self) -> str:
+        """
+        Resolves CHROMA_PERSIST_DIR to an absolute path anchored to this
+        package's own location -- not the process's current working
+        directory. A bare relative path here previously meant the vector
+        store silently pointed at a *different, empty* folder any time
+        this service happened to be launched from a different cwd (e.g.
+        after re-extracting/re-downloading a fresh copy of the project),
+        which looked exactly like "my previously ingested documents
+        disappeared" even though the original data was untouched, just
+        sitting at another path on disk. Already-absolute values (e.g.
+        an explicit .env override) are used as-is, unchanged.
+        """
+        path = Path(self.CHROMA_PERSIST_DIR)
+        return str(path if path.is_absolute() else (_PACKAGE_ROOT / path).resolve())
+
+    @property
+    def upload_tmp_dir_abs(self) -> str:
+        """Same fix as chroma_persist_dir_abs, for uploaded source files."""
+        path = Path(self.UPLOAD_TMP_DIR)
+        return str(path if path.is_absolute() else (_PACKAGE_ROOT / path).resolve())
 
 
 @lru_cache

@@ -350,8 +350,8 @@ def get_project_store() -> ProjectStore:
                             "Could not initialize PostgresProjectStore; falling back to JSONFileProjectStore.",
                             exc_info=True,
                         )
-                        _store = JSONFileProjectStore(settings.STORAGE_DIR)
+                        _store = JSONFileProjectStore(settings.storage_dir_abs)
                 else:
-                    _store = JSONFileProjectStore(settings.STORAGE_DIR)
+                    _store = JSONFileProjectStore(settings.storage_dir_abs)
 
     return _store

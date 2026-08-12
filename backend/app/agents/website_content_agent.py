@@ -9,6 +9,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from app.core.prompts import WEBSITE_CONTENT_SYSTEM_PROMPT
 from app.schemas.business import BusinessProfile
 from app.schemas.website import WebsitePlan
+from app.utils.helpers import normalize_llm_json_object
 
 
 class WebsiteContentAgent:
@@ -79,4 +80,12 @@ slug for every page slug in the Website Specification above.
             }
         )
 
-        return result if isinstance(result, dict) else {}
+        try:
+            return normalize_llm_json_object(result)
+        except ValueError:
+            # Genuinely unrecognizable shape (not the common single-item-
+            # list wrap normalize_llm_json_object already handles) --
+            # degrade to empty content rather than crashing the whole
+            # generation; downstream agents already tolerate missing
+            # per-page content.
+            return {}

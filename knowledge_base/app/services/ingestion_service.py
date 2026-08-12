@@ -16,7 +16,7 @@ class UploadTooLargeError(Exception):
 async def ingest_file(project_id: str, file: UploadFile) -> IngestResponse:
     settings = get_settings()
 
-    upload_dir = Path(settings.UPLOAD_TMP_DIR)
+    upload_dir = Path(settings.upload_tmp_dir_abs)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     suffix = Path(file.filename or "upload").suffix

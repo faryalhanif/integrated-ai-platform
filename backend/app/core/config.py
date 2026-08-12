@@ -1,7 +1,15 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# This file lives at backend/app/core/config.py -- three parents up is
+# the backend package root, used below to anchor relative storage paths
+# so they resolve the same way regardless of the process's current
+# working directory at launch time (see storage_dir_abs /
+# website_storage_dir_abs).
+_PACKAGE_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 class Settings(BaseSettings):
@@ -129,6 +137,27 @@ class Settings(BaseSettings):
             for origin in self.CORS_ORIGINS.split(",")
             if origin.strip()
         ]
+
+    @property
+    def storage_dir_abs(self) -> str:
+        """
+        Resolves STORAGE_DIR to an absolute path anchored to this
+        package's own location -- not the process's current working
+        directory. A bare relative path here previously meant project
+        data silently pointed at a *different, empty* folder any time
+        this service happened to be launched from a different cwd (e.g.
+        after re-extracting/re-downloading a fresh copy of the project).
+        Already-absolute values (e.g. an explicit .env override) are
+        used as-is, unchanged.
+        """
+        path = Path(self.STORAGE_DIR)
+        return str(path if path.is_absolute() else (_PACKAGE_ROOT / path).resolve())
+
+    @property
+    def website_storage_dir_abs(self) -> str:
+        """Same fix as storage_dir_abs, for generated websites."""
+        path = Path(self.WEBSITE_STORAGE_DIR)
+        return str(path if path.is_absolute() else (_PACKAGE_ROOT / path).resolve())
 
 
 @lru_cache

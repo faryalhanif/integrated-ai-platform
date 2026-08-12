@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Dict, Optional
 import re
 
 
@@ -61,6 +61,33 @@ def slugify_business_name(name: str, suffix: str) -> str:
     half-written page, which shows up in a browser as a blank/broken
     preview with no indication of what went wrong.
     """
+
+
+def normalize_llm_json_object(result: Any) -> Dict[str, Any]:
+    """
+    Gemini (and other models) occasionally wrap a JSON object response
+    in a single-element array -- e.g. returning [{"pages": [...], ...}]
+    instead of {"pages": [...], ...} -- even when the prompt and format
+    instructions ask for a bare object. This normalizes that shape
+    before it's handed to a Pydantic model or used as a plain dict, so
+    an intermittent formatting quirk doesn't fail the whole request.
+    """
+
+    if isinstance(result, list):
+        if len(result) == 1 and isinstance(result[0], dict):
+            return result[0]
+        raise ValueError(
+            f"Expected a single JSON object, got a list of {len(result)} "
+            "items -- the model's response didn't match the requested shape."
+        )
+
+    if not isinstance(result, dict):
+        raise ValueError(
+            f"Expected a JSON object, got {type(result).__name__} -- the "
+            "model's response didn't match the requested shape."
+        )
+
+    return result
 
 
 def assert_complete_html_document(html: str) -> None:
